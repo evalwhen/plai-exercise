@@ -93,4 +93,7 @@
 (test (interp (plusC (numC 10) (appC 'const5 (numC 10)))
               (list (fdC 'const5 '_ (numC 5))))
       15)
+(interp (appC 'f1 (numC 3))
+                  (list (fdC 'f1 'x (appC 'f2 (numC 4)))
+                        (fdC 'f2 'y (plusC (idC 'x) (idC 'y)))))
  

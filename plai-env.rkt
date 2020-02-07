@@ -100,7 +100,7 @@
                   (interp (fdC-body fd)
                           (extend-env (bind (fdC-arg fd)
                                             (interp a env fds))
-                                      env)
+                                      mt-env)
                           fds))]
     [plusC (l r) (+ (interp l env fds) (interp r env fds))]
     [multC (l r) (* (interp l env fds) (interp r env fds))]))
@@ -119,3 +119,8 @@
               mt-env
               (list (fdC 'double 'x (plusC (idC 'x) (idC 'x)))))
       16)
+
+(interp (appC 'f1 (numC 3))
+                  mt-env
+                  (list (fdC 'f1 'x (appC 'f2 (numC 4)))
+                        (fdC 'f2 'y (plusC (idC 'x) (idC 'y)))))

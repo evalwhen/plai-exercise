@@ -15,7 +15,8 @@
   [multS (l : ExprS) (r : ExprS)]
   [uminusS (e : ExprS)])
 
-
+(define-type FunDefC
+  [fdC (name : symbol) (arg : symbol) (body : ExprC)])
 
 (define (desugar [as : ExprS]) : ExprC
   (type-case ExprS as
@@ -66,25 +67,6 @@
                         (subst what for r))]
     [multC (l r) (multC (subst what for l)
                         (subst what for r))]))
-;; language core==============================================
-(define-type Binding
-  [bind (name : symbol) (val : number)])
-
-(define-type-alias Env (listof Binding))
-(define mt-env empty)
-(define extend-env cons)
-
-(define (lookup [for : symbol] [env : Env]) : number
-  (cond
-    [(empty? env) (error 'lookup "name not found")]
-    [else (cond
-            [(symbol=? for (bind-name (first env)))
-             (bind-val (first env))]
-            [else (lookup for (rest env))])]))
-
-(define-type FunDefC
-  [fdC (name : symbol) (arg : symbol) (body : ExprC)])
-
 (define-type ExprC
   [numC (n : number)]
   [idC (s : symbol)]
@@ -92,30 +74,19 @@
   [plusC (l : ExprC) (r : ExprC)]
   [multC (l : ExprC) (r : ExprC)])
 
-(define (interp [a : ExprC] [env : Env] [fds : (listof FunDefC)]) : number
+(define (interp [a : ExprC] [fds : (listof FunDefC)]) : number
   (type-case ExprC a
     [numC (n) n]
-    [idC (n) (lookup n env)]
+    [idC (_) (error 'interp "shouldn't get here")]
     [appC (f a) (local ([define fd (get-fundef f fds)])
-                  (interp (fdC-body fd)
-                          (extend-env (bind (fdC-arg fd)
-                                            (interp a env fds))
-                                      env)
+                  (interp (subst (interp a fds)
+                                 (fdC-arg fd)
+                                 (fdC-body fd))
                           fds))]
-    [plusC (l r) (+ (interp l env fds) (interp r env fds))]
-    [multC (l r) (* (interp l env fds) (interp r env fds))]))
+    [plusC (l r) (+ (interp l fds) (interp r fds))]
+    [multC (l r) (* (interp l fds) (interp r fds))]))
 
 (define empty-fds (list))
-
 (define (r3 [s : s-expression]) : number
-  (interp (desugar (parse s)) mt-env empty-fds))
+  (interp (desugar (parse s)) empty-fds))
 
-(test (interp (plusC (numC 10) (appC 'const5 (numC 10)))
-              mt-env
-              (list (fdC 'const5 '_ (numC 5))))
-      15)
-
-(test (interp (plusC (numC 10) (appC 'double (plusC (numC 1) (numC 2))))
-              mt-env
-              (list (fdC 'double 'x (plusC (idC 'x) (idC 'x)))))
-      16)

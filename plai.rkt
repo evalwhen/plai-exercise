@@ -1,20 +1,28 @@
 #lang plai-typed
 
-(define-type ArithC
-  [numC (n : number)]
-  [plusC (l : ArithC) (r : ArithC)]
-  [multC (l : ArithC) (r : ArithC)])
+;(define-type ArithC
+;  [numC (n : number)]
+;  [plusC (l : ArithC) (r : ArithC)]
+;  [multC (l : ArithC) (r : ArithC)])
 
-(define-type ArithS
+;; type for surface syntax
+(define-type ExprS
   [numS (n : number)]
-  [plusS (l : ArithS) (r : ArithS)]
-  [bminusS (l : ArithS) (r : ArithS)]
-  [multS (l : ArithS) (r : ArithS)]
-  [uminusS (e : ArithS)])
+  [idS (id : symbol)]
+  [appS (f : symbol) (a : ExprS)]
+  [plusS (l : ExprS) (r : ExprS)]
+  [bminusS (l : ExprS) (r : ExprS)]
+  [multS (l : ExprS) (r : ExprS)]
+  [uminusS (e : ExprS)])
 
-(define (desugar [as : ArithS]) : ArithC
-  (type-case ArithS as
+(define-type FunDefC
+  [fdC (name : symbol) (arg : symbol) (body : ExprC)])
+
+(define (desugar [as : ExprS]) : ExprC
+  (type-case ExprS as
     [numS (n) (numC n)]
+    [idS (id) (idC id)]
+    [appS (f a) (appC f (desugar a))]
     [plusS (l r) (plusC (desugar l)
                         (desugar r))]
     [multS (l r) (multC (desugar l)
@@ -24,10 +32,10 @@
     [bminusS (l r) (fault-tolerant (desugar l) (desugar r))]
     [uminusS (e) (fault-tolerant (numC 0) (desugar e))]))
 
-(define (fault-tolerant [l : ArithC] [r : ArithC]) : ArithC
+(define (fault-tolerant [l : ExprC] [r : ExprC]) : ExprC
   (plusC l (multC (numC -1) r)))
                         
-(define (parse [s : s-expression]) : ArithS
+(define (parse [s : s-expression]) : ExprS
   (cond
     [(s-exp-number? s) (numS (s-exp->number s))]
     [(s-exp-list? s)
@@ -41,12 +49,44 @@
          [else (error 'parse "invalid list input")]))]
     [else (error 'parse "invalid input")]))
 
-(define (interp [a : ArithC]) : number
-  (type-case ArithC a
-    [numC (n) n]
-    [plusC (l r) (+ (interp l) (interp r))]
-    [multC (l r) (* (interp l) (interp r))]))
+(define (get-fundef [fname : symbol] [fds : (listof FunDefC)]) : FunDefC
+  (cond
+    [(empty? fds) (error 'get-fundef "reference to undefined function")]
+    ((cons? fds) (cond
+                   [(equal? fname (fdC-name (first fds))) (first fds)]
+                   [else (get-fundef fname (rest fds))]))))
 
+(define (subst [what : number] [for : symbol] [in : ExprC]) : ExprC
+  (type-case ExprC in
+    [numC (n) in]
+    [idC (s) (cond
+               [(symbol=? s for) (numC what)]
+               [else in])]
+    [appC (f a) (appC f (subst what for a))]
+    [plusC (l r) (plusC (subst what for l)
+                        (subst what for r))]
+    [multC (l r) (multC (subst what for l)
+                        (subst what for r))]))
+(define-type ExprC
+  [numC (n : number)]
+  [idC (s : symbol)]
+  [appC (fun : symbol) (arg : ExprC)]
+  [plusC (l : ExprC) (r : ExprC)]
+  [multC (l : ExprC) (r : ExprC)])
+
+(define (interp [a : ExprC] [fds : (listof FunDefC)]) : number
+  (type-case ExprC a
+    [numC (n) n]
+    [idC (_) (error 'interp "shouldn't get here")]
+    [appC (f a) (local ([define fd (get-fundef f fds)])
+                  (interp (subst (interp a fds)
+                                 (fdC-arg fd)
+                                 (fdC-body fd))
+                          fds))]
+    [plusC (l r) (+ (interp l fds) (interp r fds))]
+    [multC (l r) (* (interp l fds) (interp r fds))]))
+
+(define empty-fds (list))
 (define (r3 [s : s-expression]) : number
-  (interp (desugar (parse s))))
+  (interp (desugar (parse s)) empty-fds))
 

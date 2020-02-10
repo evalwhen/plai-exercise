@@ -38,12 +38,9 @@
     [else
      (error 'num* "one argument was not a number")]))
 
-;(define-type FunDefC
-;  [fdC (name : symbol) (arg : symbol) (body : ExprC)])
-
 (define-type Value
   [numV (n : number)]
-  [closV (arg : symbol) (body : ExprC) (env : Env)])
+  [closV (f : (Value (Value -> Value) -> Value))])
 
 (define-type ExprC
   [numC (n : number)]
@@ -51,35 +48,46 @@
   [appC (fun : ExprC) (arg : ExprC)]
   [plusC (l : ExprC) (r : ExprC)]
   [multC (l : ExprC) (r : ExprC)]
-  [lamC (arg : symbol) (body : ExprC)])
+  [lamC (arg : symbol) (body : ExprC)]
+)
 
-(define (interp [a : ExprC] [env : Env]) : Value
-  (type-case ExprC a
-    [numC (n) (numV n)]
-    [idC (n) (lookup n env)]
-    [appC (f a) (cond
-                  [(lamC? f)
-                   (local ([define fd (interp f env)])
-                     (interp (closV-body fd)
-                             (extend-env (bind (closV-arg fd)
-                                               (interp a env))
-                                         (closV-env fd))))]
-                  [else (error 'appC "f is not a function value")])]
-    ;    [appC (f a) (interp (fdC-body f)
-    ;                          (extend-env (bind (fdC-arg f)
-    ;                                            (interp a env))
-    ;                                      mt-env))]
-    [plusC (l r) (num+ (interp l env) (interp r env))]
-    [multC (l r) (num* (interp l env) (interp r env))]
-    [lamC (a b) (closV a b env)]))
+(define (interp/k [expr : ExprC] [env : Env] [k : (Value -> Value)]) : Value
+  (type-case ExprC expr
+    [numC (n) (k (numV n))]
+    [idC (n) (k (lookup n env))]
+    [plusC (l r) (interp/k l env
+                       (lambda (lv)
+                         (interp/k r env
+                                   (lambda (rv)
+                                     (k (num+ lv rv))))))]
+    [multC (l r) (interp/k l env
+                       (lambda (lv)
+                         (interp/k r env
+                                   (lambda (rv)
+                                     (k (num* lv rv))))))]
 
-(test (interp (plusC (numC 10) (appC (lamC '_ (numC 5)) (numC 10)))
-              mt-env)
+    [appC (f a) (interp/k f env
+                      (lambda (fv)
+                        (interp/k a env
+                                  (lambda (av)
+                                    ((closV-f fv) av k)))))]
+
+    [lamC (a b) (k (closV (lambda (arg-val dyn-k)
+                        (interp/k b
+                                  (extend-env (bind a arg-val)
+                                              env)
+                                  dyn-k))))]))
+
+
+(define (interp [expr : ExprC]) : Value
+  (interp/k expr mt-env
+            (lambda (ans)
+              ans)))
+
+
+(test (interp (plusC (numC 10) (appC (lamC '_ (numC 5)) (numC 10))))
       (numV 15))
 
-(test/exn (interp (plusC (numC 10) (appC (numC 1) (numC 10)))
-              mt-env)
-      "f is not a function value")
 
 ;(define (f1 x)
 ;  (f2 4))
@@ -89,6 +97,5 @@
 ; test lexical scope
 (test (interp (appC (lamC 'x (appC (lamC 'y (plusC (idC 'x) (idC 'y)))
                                           (numC 4)))
-                        (numC 3))
-                  mt-env)
+                        (numC 3)))
           (numV 7))

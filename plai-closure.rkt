@@ -37,13 +37,23 @@
      (numV (* (numV-n l) (numV-n r)))]
     [else
      (error 'num* "one argument was not a number")]))
+(define (lookup-msg-helper [n : symbol] [ns : (listof symbol)] [vs : (listof Value)]) : Value
+  (cond
+    [(empty? ns) (error 'lookup-msg "method not found")]
+    [else (cond
+            [(symbol=? n (first ns)) (first vs)]
+            [else (lookup-msg-helper n (rest ns) (rest vs))])]))
 
-;(define-type FunDefC
-;  [fdC (name : symbol) (arg : symbol) (body : ExprC)])
+(define (lookup-msg [n : symbol] [o : Value]) : Value
+  (type-case Value o
+    [objV (ns vs)
+          (lookup-msg-helper n ns vs)]
+    [else (error 'lookup-msg "not a objct")]))
 
 (define-type Value
   [numV (n : number)]
-  [closV (arg : symbol) (body : ExprC) (env : Env)])
+  [closV (arg : symbol) (body : ExprC) (env : Env)]
+  [objV (ns : (listof symbol)) (vs : (listof Value))])
 
 (define-type ExprC
   [numC (n : number)]
@@ -51,7 +61,9 @@
   [appC (fun : ExprC) (arg : ExprC)]
   [plusC (l : ExprC) (r : ExprC)]
   [multC (l : ExprC) (r : ExprC)]
-  [lamC (arg : symbol) (body : ExprC)])
+  [lamC (arg : symbol) (body : ExprC)]
+  [objC (ns : (listof symbol)) (es : (listof ExprC))]
+  [msgC (o : ExprC) (n : symbol)])
 
 (define (interp [a : ExprC] [env : Env]) : Value
   (type-case ExprC a
@@ -65,10 +77,10 @@
                                                (interp a env))
                                          (closV-env fd))))]
                   [else (error 'appC "f is not a function value")])]
-    ;    [appC (f a) (interp (fdC-body f)
-    ;                          (extend-env (bind (fdC-arg f)
-    ;                                            (interp a env))
-    ;                                      mt-env))]
+    [objC (ns es) (objV ns (map (lambda (e)
+                                  (interp e env))
+                                es))]
+    [msgC (o n) (lookup-msg n (interp o env))]
     [plusC (l r) (num+ (interp l env) (interp r env))]
     [multC (l r) (num* (interp l env) (interp r env))]
     [lamC (a b) (closV a b env)]))

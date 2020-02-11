@@ -19,7 +19,7 @@
 (define table (make-hash empty))
 
 (define-syntax (cps e)
-  (syntax-case e (with rec lam cnd seq set quote display read-number)
+  (syntax-case e (with rec lam cnd seq set quote display read-number generator)
     [(_ (with (v e) b))
      #'(cps ((lam (v) b) e))]
     [(_ (rec (v f) b))
@@ -67,6 +67,21 @@
          ((cps a) (lambda (av)
                     ((cps b) (lambda (bv)
                                (k (f av bv)))))))]
+    [(_ (generator (yield) (v) b))
+     (and (identifier? #'v) (identifier? #'yield))
+     #'(lambda (k)
+         (k (let ([where-to-go (lambda (v) (error 'where-to-go "nothing"))])
+              (letrec([resumer (lambda (v)
+                                 ((cps b) (lambda (k)
+                                            (error 'generator "fell through"))))]
+                      [yield (lambda (v gen-k)
+                               (begin
+                                 (set! resumer gen-k)
+                                 (where-to-go v)))])
+                (lambda (v dyn-k)
+                  (begin
+                    (set! where-to-go dyn-k)
+                    (resumer v)))))))]
     [(_ atomic)
      #'(lambda (k)
          (k atomic))]
@@ -81,24 +96,5 @@
 ;
 ;(run (cps (display (+ (read-number "First")
 ;                      (read-number "Second")))))
-
-(run (cps ((lam (x) (* x x)) 10)))
-
-((lambda (k)
-   ((lambda (k)
-      (k (lambda (x dyn-k)
-           ((lambda (k)
-              ((lambda (k) (k x))
-               (lambda (av)
-                 ((lambda (k) (k x))
-                  (lambda (bv) (k (* av bv))))))) dyn-k))))
-    (lambda (fv)
-      ((lambda (k) (k 10))
-       (lambda (av) (fv av k))))))
- identity)
-
-
-
-
 
 

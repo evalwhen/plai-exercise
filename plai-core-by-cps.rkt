@@ -49,34 +49,34 @@
   [plusC (l : ExprC) (r : ExprC)]
   [multC (l : ExprC) (r : ExprC)]
   [lamC (arg : symbol) (body : ExprC)]
-)
+  )
 
 (define (interp/k [expr : ExprC] [env : Env] [k : (Value -> Value)]) : Value
   (type-case ExprC expr
     [numC (n) (k (numV n))]
     [idC (n) (k (lookup n env))]
     [plusC (l r) (interp/k l env
-                       (lambda (lv)
-                         (interp/k r env
-                                   (lambda (rv)
-                                     (k (num+ lv rv))))))]
+                           (lambda (lv)
+                             (interp/k r env
+                                       (lambda (rv)
+                                         (k (num+ lv rv))))))]
     [multC (l r) (interp/k l env
-                       (lambda (lv)
-                         (interp/k r env
-                                   (lambda (rv)
-                                     (k (num* lv rv))))))]
+                           (lambda (lv)
+                             (interp/k r env
+                                       (lambda (rv)
+                                         (k (num* lv rv))))))]
 
     [appC (f a) (interp/k f env
-                      (lambda (fv)
-                        (interp/k a env
-                                  (lambda (av)
-                                    ((closV-f fv) av k)))))]
+                          (lambda (fv)
+                            (interp/k a env
+                                      (lambda (av)
+                                        ((closV-f fv) av k)))))]
 
     [lamC (a b) (k (closV (lambda (arg-val dyn-k)
-                        (interp/k b
-                                  (extend-env (bind a arg-val)
-                                              env)
-                                  dyn-k))))]))
+                            (interp/k b
+                                      (extend-env (bind a arg-val)
+                                                  env)
+                                      dyn-k))))]))
 
 
 (define (interp [expr : ExprC]) : Value
@@ -96,6 +96,6 @@
 ;(f1 2)
 ; test lexical scope
 (test (interp (appC (lamC 'x (appC (lamC 'y (plusC (idC 'x) (idC 'y)))
-                                          (numC 4)))
-                        (numC 3)))
-          (numV 7))
+                                   (numC 4)))
+                    (numC 3)))
+      (numV 7))

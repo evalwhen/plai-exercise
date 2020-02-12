@@ -94,7 +94,4 @@
 
 ;(test (run (cps 3))                           3)
 ;
-;(run (cps (display (+ (read-number "First")
-;                      (read-number "Second")))))
-
 
